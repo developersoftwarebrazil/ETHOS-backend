@@ -1,41 +1,25 @@
-import { NestFactory } from '@nestjs/core';
-import { AppModule } from './app.module';
-import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
-import { config as dotenvConfig } from 'dotenv';
-import serverless from 'serverless-http';
+// src/lambda.ts
+import { APIGatewayProxyEvent, APIGatewayProxyResult, Context } from 'aws-lambda';
+import serverlessExpress from '@vendia/serverless-express';
+import { createNestApp } from './main';
+import { Express } from 'express';
 
-let cachedServer;
+let cachedServer: ReturnType<typeof serverlessExpress>;
 
-async function bootstrap() {
-  dotenvConfig();
-
-  const app = await NestFactory.create(AppModule);
-
-  app.enableCors({
-    origin: '*',
-    methods: ['GET', 'POST', 'PUT', 'DELETE'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
-  });
-
-  const swaggerConfig = new DocumentBuilder()
-    .setTitle('ETHOS API')
-    .setDescription('Documentação da API da plataforma ETHOS')
-    .setVersion('1.0')
-    .addBearerAuth()
-    .build();
-
-  const document = SwaggerModule.createDocument(app, swaggerConfig);
-  SwaggerModule.setup('docs', app, document);
-
-  await app.init();
-
-  const expressApp = app.getHttpAdapter().getInstance();
-  return serverless(expressApp);
-}
-
-export const handler = async (event, context) => {
+export const handler = async (
+  event: APIGatewayProxyEvent,
+  context: Context
+): Promise<APIGatewayProxyResult> => {
   if (!cachedServer) {
-    cachedServer = await bootstrap();
+    const app = await createNestApp();
+    const expressApp = app.getHttpAdapter().getInstance() as Express;
+    cachedServer = serverlessExpress({ app: expressApp });
   }
-  return cachedServer(event, context);
+
+  return new Promise((resolve, reject) => {
+    cachedServer(event, context, (err, result) => {
+      if (err) return reject(err);
+      resolve(result as APIGatewayProxyResult);
+    });
+  });
 };
