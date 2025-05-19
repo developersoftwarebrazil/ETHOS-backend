@@ -1,27 +1,35 @@
-// src/nest-server.ts
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
-import { ExpressAdapter } from '@nestjs/platform-express';
-import express from 'express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { config as dotenvConfig } from 'dotenv';
 
-export async function createNestServer() {
-  const expressApp = express();
-  const adapter = new ExpressAdapter(expressApp);
-  const app = await NestFactory.create(AppModule, adapter);
+async function bootstrap() {
+  // Carrega variáveis de ambiente do .env
+  dotenvConfig();
 
-  app.enableCors();
+  const app = await NestFactory.create(AppModule);
 
+  // CORS habilitado
+  app.enableCors({
+    origin: '*', // ou defina uma lista segura como: ['http://localhost:3000']
+    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+  });
+
+  // Swagger config
   const config = new DocumentBuilder()
-    .setTitle('NestJS API')
-    .setDescription('Documentação da API')
+    .setTitle('ETHOS API')
+    .setDescription('Documentação da API da plataforma ETHOS')
     .setVersion('1.0')
+    .addBearerAuth()
     .build();
 
   const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('docs', app, document);
+  SwaggerModule.setup('docs', app, document); // acessível em /docs
 
-  await app.init();
-
-  return expressApp;
+  const PORT = process.env.PORT || 3000;
+  await app.listen(PORT);
+  console.log(`🚀 Server running on http://localhost:${PORT}`);
+  console.log(`📚 Swagger available at http://localhost:${PORT}/docs`);
 }
+bootstrap();
